@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>文字轉長圖</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg: #1a1814;
+    --panel: #242018;
+    --card: #2e2920;
+    --border: #3d3628;
+    --accent: #d4a843;
+    --accent2: #c27b3e;
+    --text: #e8dfc8;
+    --text-dim: #9a9080;
+    --danger: #c45c3e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Serif TC', serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--panel);
+  }
+
+  header h1 {
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+  }
+
+  header span {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 2px 8px;
+    border-radius: 2px;
+  }
+
+  .workspace {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    flex: 1;
+    gap: 0;
+    min-height: 0;
+  }
+
+  /* ── LEFT: Editor ── */
+  .editor-panel {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  .toolbar-group {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    padding-right: 10px;
+    border-right: 1px solid var(--border);
+    margin-right: 4px;
+  }
+  .toolbar-group:last-child { border-right: none; }
+
+  .btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-family: 'Noto Serif TC', serif;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn:hover { background: var(--border); border-color: var(--accent); color: var(--accent); }
+  .btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+  .btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+
+  .btn-icon {
+    padding: 5px 8px;
+    font-size: 0.9rem;
+  }
+
+  .font-size-display {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--accent);
+    min-width: 32px;
+    text-align: center;
+  }
+
+  #editor {
+    flex: 1;
+    background: var(--bg);
+    color: var(--text);
+    border: none;
+    outline: none;
+    resize: none;
+    padding: 24px 28px;
+    font-family: 'Noto Serif TC', serif;
+    font-size: 15px;
+    line-height: 1.85;
+    tab-size: 2;
+  }
+
+  /* ── RIGHT: Settings + Preview ── */
+  .settings-panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--panel);
+    overflow-y: auto;
+  }
+
+  .section {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section-title {
+    font-size: 0.68rem;
+    letter-spacing: 0.18em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    gap: 8px;
+  }
+
+  .setting-label {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+  }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 120px;
+    height: 3px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+  }
+
+  input[type=number], input[type=color], select {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 8px;
+    border-radius: 3px;
+    font-size: 0.82rem;
+    font-family: 'Noto Serif TC', serif;
+    outline: none;
+  }
+  input[type=number] { width: 70px; }
+  input[type=color] { width: 36px; height: 28px; padding: 2px; cursor: pointer; }
+  select { width: 130px; }
+
+  .val-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--accent);
+    min-width: 28px;
+    text-align: right;
+  }
+
+  /* Image style selector */
+  .style-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .style-option {
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    text-align: center;
+    font-size: 0.75rem;
+    transition: all 0.15s;
+    background: var(--card);
+  }
+  .style-option:hover { border-color: var(--accent); }
+  .style-option.active { border-color: var(--accent); background: rgba(212,168,67,0.1); color: var(--accent); }
+  .style-option .swatch { height: 24px; border-radius: 2px; margin-bottom: 4px; }
+
+  /* Generate button */
+  .generate-btn {
+    margin: 16px;
+    padding: 12px;
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    border-radius: 4px;
+    font-family: 'Noto Serif TC', serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .generate-btn:hover { background: var(--accent2); transform: translateY(-1px); }
+  .generate-btn:active { transform: translateY(0); }
+
+  /* Output area */
+  #output {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .output-img-wrap {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .output-img-wrap img { display: block; width: 100%; }
+
+  .img-label {
+    position: absolute;
+    top: 6px; left: 6px;
+    background: rgba(0,0,0,0.65);
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    padding: 2px 6px;
+    border-radius: 2px;
+  }
+
+  .dl-btn {
+    display: block;
+    text-align: center;
+    margin-top: 4px;
+    padding: 5px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    cursor: pointer;
+    border-radius: 3px;
+    text-decoration: none;
+    transition: all 0.15s;
+  }
+  .dl-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .dl-all-btn {
+    display: block;
+    margin: 0 16px 16px;
+    padding: 8px;
+    background: var(--card);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-size: 0.8rem;
+    cursor: pointer;
+    border-radius: 3px;
+    text-align: center;
+    transition: all 0.15s;
+  }
+  .dl-all-btn:hover { background: rgba(212,168,67,0.1); }
+
+  .empty-state {
+    padding: 32px 16px;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.82rem;
+    line-height: 1.8;
+  }
+
+  /* Progress */
+  #progress {
+    display: none;
+    margin: 16px;
+    padding: 10px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>文字 → 長圖</h1>
+  <span>TEXT TO IMAGE</span>
+</header>
+
+<div class="workspace">
+
+  <!-- LEFT: Editor -->
+  <div class="editor-panel">
+    <div class="toolbar">
+
+      <div class="toolbar-group">
+        <button class="btn" onclick="indentLine()" title="段落開頭縮排兩格">⇥ 縮排</button>
+        <button class="btn" onclick="indentAllLines()" title="全部段落縮排">全縮排</button>
+      </div>
+
+      <div class="toolbar-group">
+        <button class="btn btn-icon" id="alignLeft" onclick="setAlign('left')" title="靠左">☰</button>
+        <button class="btn btn-icon" id="alignCenter" onclick="setAlign('center')" title="置中">≡</button>
+        <button class="btn btn-icon" id="alignRight" onclick="setAlign('right')" title="靠右">≣</button>
+      </div>
+
+      <div class="toolbar-group">
+        <button class="btn btn-icon" onclick="changeFontSize(-1)" title="縮小字體">A−</button>
+        <span class="font-size-display" id="fontSizeDisplay">15</span>
+        <button class="btn btn-icon" onclick="changeFontSize(1)" title="放大字體">A+</button>
+      </div>
+
+      <div class="toolbar-group">
+        <button class="btn danger" onclick="clearEditor()">清除</button>
+      </div>
+
+    </div>
+    <textarea id="editor" placeholder="在此貼上或輸入文字...&#10;&#10;　　段落開頭的縮排和分行都會被保留。&#10;　　點「⇥ 縮排」可在當前行開頭加入兩個全形空格。&#10;　　點「全縮排」可讓所有段落縮排。"></textarea>
+  </div>
+
+  <!-- RIGHT: Settings & Output -->
+  <div class="settings-panel">
+
+    <!-- Image Style -->
+    <div class="section">
+      <div class="section-title">圖片風格</div>
+      <div class="style-grid">
+        <div class="style-option active" onclick="selectStyle(this,'#fdfaf4','#1a1814','#2c2720')" data-bg="#fdfaf4" data-fg="#1a1814" data-card="#2c2720">
+          <div class="swatch" style="background:#fdfaf4;border:1px solid #ddd;"></div>
+          米白典雅
+        </div>
+        <div class="style-option" onclick="selectStyle(this,'#1a1814','#e8dfc8','#2e2920')" data-bg="#1a1814" data-fg="#e8dfc8" data-card="#2e2920">
+          <div class="swatch" style="background:#1a1814;"></div>
+          深色復古
+        </div>
+        <div class="style-option" onclick="selectStyle(this,'#ffffff','#111111','#f5f5f5')" data-bg="#ffffff" data-fg="#111111" data-card="#f5f5f5">
+          <div class="swatch" style="background:#fff;border:1px solid #ddd;"></div>
+          純白簡約
+        </div>
+        <div class="style-option" onclick="selectStyle(this,'#0f1923','#c9d8e8','#1a2635')" data-bg="#0f1923" data-fg="#c9d8e8" data-card="#1a2635">
+          <div class="swatch" style="background:#0f1923;"></div>
+          深海藍調
+        </div>
+      </div>
+    </div>
+
+    <!-- Image Settings -->
+    <div class="section">
+      <div class="section-title">圖片設定</div>
+
+      <div class="setting-row">
+        <span class="setting-label">圖片寬度</span>
+        <input type="range" min="600" max="1200" step="50" value="800" id="imgWidth" oninput="updateVal('widthVal',this.value,'px')">
+        <span class="val-label" id="widthVal">800px</span>
+      </div>
+
+      <div class="setting-row">
+        <span class="setting-label">內邊距</span>
+        <input type="range" min="20" max="100" step="5" value="48" id="imgPad" oninput="updateVal('padVal',this.value,'px')">
+        <span class="val-label" id="padVal">48px</span>
+      </div>
+
+      <div class="setting-row">
+        <span class="setting-label">圖片字級</span>
+        <input type="range" min="14" max="40" step="1" value="22" id="imgFontSize" oninput="updateVal('imgFontVal',this.value,'px')">
+        <span class="val-label" id="imgFontVal">22px</span>
+      </div>
+
+      <div class="setting-row">
+        <span class="setting-label">行距</span>
+        <input type="range" min="1.4" max="2.8" step="0.1" value="2.0" id="lineHeight" oninput="updateVal('lineHVal',this.value,'')">
+        <span class="val-label" id="lineHVal">2.0</span>
+      </div>
+
+      <div class="setting-row">
+        <span class="setting-label">段落間距</span>
+        <input type="range" min="0" max="60" step="4" value="20" id="paraGap" oninput="updateVal('paraVal',this.value,'px')">
+        <span class="val-label" id="paraVal">20px</span>
+      </div>
+
+      <div class="setting-row">
+        <span class="setting-label">最多張數</span>
+        <input type="number" id="maxSlices" value="10" min="1" max="20">
+      </div>
+
+      <div class="setting-row">
+        <span class="setting-label">字型</span>
+        <select id="fontFamily">
+          <option value="'Noto Serif TC', serif">Noto Serif TC</option>
+          <option value="'Noto Sans TC', sans-serif">Noto Sans TC</option>
+          <option value="Georgia, serif">Georgia</option>
+        </select>
+      </div>
+
+      <div class="setting-row">
+        <span class="setting-label">背景色</span>
+        <input type="color" id="customBg" value="#fdfaf4" oninput="customColorChanged()">
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">文字色</span>
+        <input type="color" id="customFg" value="#1a1814" oninput="customColorChanged()">
+      </div>
+
+      <!-- Watermark -->
+      <div class="setting-row" style="margin-top:8px;">
+        <span class="setting-label">浮水印</span>
+        <input type="text" id="watermark" placeholder="可留空" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:4px 8px;border-radius:3px;font-size:0.82rem;width:130px;outline:none;">
+      </div>
+    </div>
+
+    <button class="generate-btn" onclick="generate()">▶ 產生圖片</button>
+    <div id="progress">產生中...</div>
+    <div id="output"><div class="empty-state">設定好後點「產生圖片」<br>預覽會在這裡顯示</div></div>
+    <div id="dlAllWrap" style="display:none">
+      <button class="dl-all-btn" onclick="downloadAll()">↓ 全部下載</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Hidden canvas for rendering -->
+<canvas id="canvas" style="display:none"></canvas>
+
+<script>
+// ── State ──
+let editorFontSize = 15;
+let textAlign = 'left';
+let currentBg = '#fdfaf4';
+let currentFg = '#1a1814';
+let generatedImages = [];
+
+// ── Editor controls ──
+function indentLine() {
+  const ta = document.getElementById('editor');
+  const start = ta.selectionStart;
+  const val = ta.value;
+  // Find start of line
+  let lineStart = val.lastIndexOf('\n', start - 1) + 1;
+  const indent = '　　'; // two full-width spaces
+  ta.value = val.slice(0, lineStart) + indent + val.slice(lineStart);
+  ta.selectionStart = ta.selectionEnd = start + indent.length;
+  ta.focus();
+}
+
+function indentAllLines() {
+  const ta = document.getElementById('editor');
+  const indent = '　　';
+  const lines = ta.value.split('\n');
+  ta.value = lines.map(l => l.trim() === '' ? l : indent + l).join('\n');
+}
+
+function setAlign(dir) {
+  textAlign = dir;
+  const ta = document.getElementById('editor');
+  ta.style.textAlign = dir;
+  ['alignLeft','alignCenter','alignRight'].forEach(id => {
+    document.getElementById(id).classList.remove('active');
+  });
+  document.getElementById('align' + dir.charAt(0).toUpperCase() + dir.slice(1)).classList.add('active');
+}
+
+function changeFontSize(delta) {
+  editorFontSize = Math.max(10, Math.min(32, editorFontSize + delta));
+  document.getElementById('editor').style.fontSize = editorFontSize + 'px';
+  document.getElementById('fontSizeDisplay').textContent = editorFontSize;
+}
+
+function clearEditor() {
+  if (confirm('確定要清除所有文字嗎？')) {
+    document.getElementById('editor').value = '';
+  }
+}
+
+function updateVal(id, val, unit) {
+  document.getElementById(id).textContent = val + unit;
+}
+
+function selectStyle(el, bg, fg) {
+  document.querySelectorAll('.style-option').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  currentBg = bg; currentFg = fg;
+  document.getElementById('customBg').value = bg;
+  document.getElementById('customFg').value = fg;
+}
+
+function customColorChanged() {
+  document.querySelectorAll('.style-option').forEach(e => e.classList.remove('active'));
+  currentBg = document.getElementById('customBg').value;
+  currentFg = document.getElementById('customFg').value;
+}
+
+// ── Canvas rendering ──
+function generate() {
+  const text = document.getElementById('editor').value;
+  if (!text.trim()) { alert('請先輸入文字！'); return; }
+
+  const width = parseInt(document.getElementById('imgWidth').value);
+  const pad = parseInt(document.getElementById('imgPad').value);
+  const fontSize = parseInt(document.getElementById('imgFontSize').value);
+  const lh = parseFloat(document.getElementById('lineHeight').value);
+  const paraGap = parseInt(document.getElementById('paraGap').value);
+  const maxSlices = parseInt(document.getElementById('maxSlices').value);
+  const fontFamily = document.getElementById('fontFamily').value;
+  const watermark = document.getElementById('watermark').value.trim();
+  const bg = document.getElementById('customBg').value;
+  const fg = document.getElementById('customFg').value;
+  const align = textAlign;
+
+  document.getElementById('progress').style.display = 'block';
+  document.getElementById('output').innerHTML = '';
+  document.getElementById('dlAllWrap').style.display = 'none';
+  generatedImages = [];
+
+  setTimeout(() => {
+    try {
+      const images = renderTextToImages({
+        text, width, pad, fontSize, lh, paraGap,
+        maxSlices, fontFamily, watermark, bg, fg, align
+      });
+
+      generatedImages = images;
+      const output = document.getElementById('output');
+      output.innerHTML = '';
+
+      images.forEach((dataUrl, i) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'output-img-wrap';
+
+        const label = document.createElement('div');
+        label.className = 'img-label';
+        label.textContent = `${i+1} / ${images.length}`;
+
+        const img = document.createElement('img');
+        img.src = dataUrl;
+
+        const dl = document.createElement('a');
+        dl.className = 'dl-btn';
+        dl.textContent = `↓ 下載第 ${i+1} 張`;
+        dl.download = `img_${String(i+1).padStart(2,'0')}.png`;
+        dl.href = dataUrl;
+
+        wrap.appendChild(label);
+        wrap.appendChild(img);
+        output.appendChild(wrap);
+        output.appendChild(dl);
+      });
+
+      if (images.length > 1) {
+        document.getElementById('dlAllWrap').style.display = 'block';
+      }
+    } catch(e) {
+      document.getElementById('output').innerHTML = `<div class="empty-state" style="color:#c45c3e">產生失敗：${e.message}</div>`;
+    }
+    document.getElementById('progress').style.display = 'none';
+  }, 50);
+}
+
+function renderTextToImages({ text, width, pad, fontSize, lh, paraGap, maxSlices, fontFamily, watermark, bg, fg, align }) {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const lineH = fontSize * lh;
+  const innerW = width - pad * 2;
+  const fontStr = `${fontSize}px ${fontFamily}`;
+
+  ctx.font = fontStr;
+
+  // Split into paragraphs (preserve blank lines)
+  const paragraphs = text.split('\n');
+
+  // Wrap each paragraph into lines
+  const allLines = []; // { text, isBlank, paraStart }
+  paragraphs.forEach((para, pi) => {
+    if (para.trim() === '') {
+      allLines.push({ text: '', isBlank: true, paraStart: true });
+      return;
+    }
+    const words = wrapText(ctx, para, innerW);
+    words.forEach((line, li) => {
+      allLines.push({ text: line, isBlank: false, paraStart: li === 0 });
+    });
+    // paragraph gap
+    if (pi < paragraphs.length - 1 && paraGap > 0) {
+      allLines.push({ text: '', isBlank: true, isParaGap: true, gapPx: paraGap, paraStart: false });
+    }
+  });
+
+  // Calculate total height
+  const wmH = watermark ? 32 : 0;
+  const topPad = pad;
+  const botPad = pad + wmH;
+
+  // Compute per-line height contributions
+  function computeAllHeights() {
+    let h = 0;
+    allLines.forEach(line => {
+      if (line.isParaGap) h += line.gapPx;
+      else if (line.isBlank) h += lineH * 0.5;
+      else h += lineH;
+    });
+    return h;
+  }
+
+  const totalContentH = computeAllHeights();
+  const totalH = totalContentH + topPad + botPad;
+
+  // Decide slice heights
+  const sliceH = Math.ceil(totalH / maxSlices);
+  const actualSlices = Math.ceil(totalH / sliceH);
+
+  const images = [];
+
+  for (let s = 0; s < actualSlices; s++) {
+    const sliceTop = s * sliceH;
+    const sliceBot = Math.min(sliceTop + sliceH, totalH);
+    const sliceHActual = sliceBot - sliceTop;
+
+    canvas.width = width;
+    canvas.height = sliceHActual;
+
+    // Background
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, width, sliceHActual);
+
+    // Draw lines that fall within this slice
+    ctx.fillStyle = fg;
+    ctx.font = fontStr;
+    ctx.textBaseline = 'top';
+
+    let y = topPad; // absolute y from start
+    allLines.forEach(line => {
+      let lineTopAbs = y;
+      let advance = 0;
+
+      if (line.isParaGap) {
+        advance = line.gapPx;
+      } else if (line.isBlank) {
+        advance = lineH * 0.5;
+      } else {
+        advance = lineH;
+        // check if this line is visible in this slice
+        const lineTopInSlice = lineTopAbs - sliceTop;
+        const lineBotInSlice = lineTopInSlice + lineH;
+
+        if (lineBotInSlice > 0 && lineTopInSlice < sliceHActual) {
+          // Draw text
+          let x;
+          if (align === 'center') {
+            const tw = ctx.measureText(line.text).width;
+            x = (width - tw) / 2;
+          } else if (align === 'right') {
+            const tw = ctx.measureText(line.text).width;
+            x = width - pad - tw;
+          } else {
+            x = pad;
+          }
+          ctx.fillText(line.text, x, lineTopInSlice);
+        }
+      }
+      y += advance;
+    });
+
+    // Watermark
+    if (watermark) {
+      ctx.fillStyle = fg + '55';
+      ctx.font = `13px ${fontFamily}`;
+      ctx.textBaseline = 'bottom';
+      const wmX = width - pad;
+      ctx.textAlign = 'right';
+      ctx.fillText(watermark, wmX, sliceHActual - 8);
+      ctx.textAlign = 'left';
+    }
+
+    // Slice indicator line (subtle)
+    if (s < actualSlices - 1) {
+      ctx.fillStyle = fg + '18';
+      ctx.fillRect(pad, sliceHActual - 1, innerW, 1);
+    }
+
+    images.push(canvas.toDataURL('image/png'));
+  }
+
+  return images;
+}
+
+// Wrap a single paragraph into lines fitting maxWidth
+function wrapText(ctx, text, maxWidth) {
+  const lines = [];
+  if (!text) { lines.push(''); return lines; }
+
+  // Character by character (handles CJK well)
+  let current = '';
+  for (let i = 0; i < text.length; i++) {
+    const test = current + text[i];
+    if (ctx.measureText(test).width > maxWidth && current.length > 0) {
+      lines.push(current);
+      current = text[i];
+    } else {
+      current = test;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+async function downloadAll() {
+  for (let i = 0; i < generatedImages.length; i++) {
+    const a = document.createElement('a');
+    a.href = generatedImages[i];
+    a.download = `img_${String(i+1).padStart(2,'0')}.png`;
+    a.click();
+    await new Promise(r => setTimeout(r, 200));
+  }
+}
+
+// Init
+document.getElementById('alignLeft').classList.add('active');
+</script>
+</body>
+</html>
