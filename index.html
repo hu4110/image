@@ -476,6 +476,20 @@ let fontsReady = false;
 
 document.fonts.ready.then(() => { fontsReady = true; });
 
+// ── 禁則字集 ──────────────────────────────────────────────
+// 行首禁則：這些字不可出現在行首（收尾標點）
+const LINE_START_FORBIDDEN = new Set(
+  '。！？；：、，）」』】〕〉》〙〗…‥·・—–～｝'
+  + '.,!?;:)]}\'"\u2019\u201D'   // 半形對應
+);
+
+// 行尾禁則：這些字不可出現在行尾（起頭標點，不可孤懸於行末）
+const LINE_END_FORBIDDEN = new Set(
+  '（「『【〔〈《〘〖｛'
+  + '([{\'"\u2018\u201C'         // 半形對應
+);
+// ────────────────────────────────────────────────────────
+
 /* Tab switching */
 function switchTab(tab) {
   const ep = document.getElementById('editorPanel');
@@ -524,7 +538,6 @@ function changeFontSize(delta) {
 }
 
 /* Custom dialog */
-let _dialogResolve = null;
 function confirmClear() {
   document.getElementById('dialogOverlay').style.display = 'flex';
 }
@@ -582,6 +595,9 @@ async function generate() {
       align:      textAlign
     };
 
+    // 防呆：maxSlices 至少 1
+    params.maxSlices = Math.max(1, params.maxSlices || 1);
+
     const images = renderTextToImages(params);
     generatedImages = images;
     const output = document.getElementById('output');
@@ -616,7 +632,7 @@ async function generate() {
   prog.style.display = 'none';
 }
 
-/* Canvas render */
+/* ── Canvas render ── */
 function renderTextToImages({ text, width, pad, fontSize, lh, paraGap,
                                maxSlices, fontFamily, watermark, bg, fg, align }) {
   const canvas = document.getElementById('canvas');
@@ -637,77 +653,141 @@ function renderTextToImages({ text, width, pad, fontSize, lh, paraGap,
     }
     wrapText(ctx, para, innerW).forEach(line =>
       allLines.push({ text: line, isBlank: false }));
+    // 段落間距插在每段之後（末段不加）
     if (pi < paragraphs.length - 1 && paraGap > 0)
       allLines.push({ text: '', isBlank: true, isParaGap: true, gapPx: paraGap });
   });
 
   const wmH = watermark ? 32 : 0;
-  const topPad = pad, botPad = pad + wmH;
+  const topPad = pad;
+  const botPad = pad + wmH;
 
+  // 計算總高度
   let totalContentH = 0;
   allLines.forEach(l => {
-    totalContentH += l.isParaGap ? l.gapPx : (l.isBlank ? lineH * .5 : lineH);
+    totalContentH += l.isParaGap ? l.gapPx : (l.isBlank ? lineH * 0.5 : lineH);
   });
   const totalH = totalContentH + topPad + botPad;
-  const sliceH = Math.ceil(totalH / maxSlices);
+
+  // 均分切片
+  const sliceH   = Math.ceil(totalH / maxSlices);
   const numSlices = Math.ceil(totalH / sliceH);
   const images = [];
 
   for (let s = 0; s < numSlices; s++) {
     const sliceTop = s * sliceH;
     const sh = Math.min(sliceH, totalH - sliceTop);
-    canvas.width = width; canvas.height = sh;
 
+    // 防止零高度切片（極端情況）
+    if (sh <= 0) continue;
+
+    canvas.width  = width;
+    canvas.height = sh;
+
+    // 背景
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, width, sh);
-    ctx.fillStyle = fg; ctx.font = fontStr; ctx.textBaseline = 'top';
+
+    // 文字
+    ctx.fillStyle = fg;
+    ctx.font = fontStr;           // 每次 resize canvas 後必須重設
+    ctx.textBaseline = 'top';
 
     let yAbs = topPad;
     allLines.forEach(line => {
-      const advance = line.isParaGap ? line.gapPx : (line.isBlank ? lineH * .5 : lineH);
+      const advance = line.isParaGap ? line.gapPx : (line.isBlank ? lineH * 0.5 : lineH);
+
       if (!line.isBlank) {
         const yIn = yAbs - sliceTop;
+        // 只繪製與本切片有交集的行
         if (yIn + lineH > 0 && yIn < sh) {
           let x;
-          if (align === 'center')     x = (width - ctx.measureText(line.text).width) / 2;
-          else if (align === 'right') x = width - pad - ctx.measureText(line.text).width;
-          else                         x = pad;
+          const tw = ctx.measureText(line.text).width;
+          if      (align === 'center') x = (width - tw) / 2;
+          else if (align === 'right')  x = width - pad - tw;
+          else                          x = pad;
           ctx.fillText(line.text, x, yIn);
         }
       }
       yAbs += advance;
     });
 
+    // 浮水印（每張右下角）
     if (watermark) {
       ctx.save();
-      ctx.fillStyle = fg + '55'; ctx.font = `13px ${fontFamily}`;
-      ctx.textBaseline = 'bottom'; ctx.textAlign = 'right';
+      ctx.fillStyle = fg + '55';
+      ctx.font = `13px ${fontFamily}`;
+      ctx.textBaseline = 'bottom';
+      ctx.textAlign = 'right';
       ctx.fillText(watermark, width - pad, sh - 8);
       ctx.restore();
     }
+
+    // 切割線（非末張）
     if (s < numSlices - 1) {
       ctx.fillStyle = fg + '18';
       ctx.fillRect(pad, sh - 1, innerW, 1);
     }
+
     images.push(canvas.toDataURL('image/png'));
   }
+
   return images;
 }
 
+/* ── 文字折行（含禁則處理）── */
 function wrapText(ctx, text, maxWidth) {
   if (!text) return [''];
-  const lines = []; let cur = '';
-  for (const ch of text) {
+
+  const lines = [];
+  // 用 [...text] 確保正確迭代 Unicode 補充字元（如 emoji）
+  const chars = [...text];
+  let cur = '';
+
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
     const test = cur + ch;
+
     if (ctx.measureText(test).width > maxWidth && cur.length > 0) {
-      lines.push(cur); cur = ch;
-    } else { cur = test; }
+      // ── 行首禁則：標點不可置於行首 ──
+      // 將禁用字附在當前行末，允許輕微超寬（最多 +1 字寬）
+      if (LINE_START_FORBIDDEN.has(ch)) {
+        lines.push(cur + ch);
+        cur = '';
+        continue;
+      }
+
+      // ── 行尾禁則：起頭括號不可孤懸於行末 ──
+      // 將行末的起頭括號移至下一行行首
+      // 只在 cur 有兩個以上字元時才移動，否則無法拆分（避免推入空字串）
+      const curChars = [...cur];
+      const lastCh   = curChars[curChars.length - 1];
+      if (LINE_END_FORBIDDEN.has(lastCh) && curChars.length > 1) {
+        // 去掉 cur 的最後一個字元（Unicode 安全的 spread 切片）
+        lines.push(curChars.slice(0, -1).join(''));
+        cur = lastCh + ch;
+        continue;
+      }
+
+      // ── 一般斷行 ──
+      lines.push(cur);
+      cur = ch;
+
+    } else {
+      cur = test;
+    }
   }
+
+  // 收尾
   if (cur) lines.push(cur);
-  return lines;
+
+  // 移除邊角情況下可能產生的空字串行
+  const result = lines.filter(l => l !== '');
+  // 若全部被過濾（極端情況），仍返回一個元素避免外層跳過高度計算
+  return result.length > 0 ? result : [''];
 }
 
-/* Download all */
+/* ── 全部下載 ── */
 async function downloadAll() {
   if (!generatedImages.length) return;
   showToast(`開始下載 ${generatedImages.length} 張圖片…`);
@@ -715,17 +795,20 @@ async function downloadAll() {
     const a = document.createElement('a');
     a.href = generatedImages[i];
     a.download = `img_${String(i+1).padStart(2,'0')}.png`;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     await new Promise(r => setTimeout(r, 350));
   }
 }
 
-/* Toast */
+/* ── Toast ── */
 function showToast(msg) {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.style.opacity = '1';
-  clearTimeout(t._t);
-  t._t = setTimeout(() => { t.style.opacity = '0'; }, 2400);
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => { t.style.opacity = '0'; }, 2400);
 }
 </script>
 </body>
