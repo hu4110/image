@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>文字轉長圖</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700&family=Noto+Sans+TC:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #1a1814;
+  --panel: #242018;
+  --card: #2e2920;
+  --border: #3d3628;
+  --accent: #d4a843;
+  --accent2: #c27b3e;
+  --text: #e8dfc8;
+  --text-dim: #9a9080;
+  --danger: #c45c3e;
+  --r: 4px;
+  --header-h: 56px;
+  --tab-h: 44px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Noto Serif TC', serif;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Header ── */
+header {
+  height: var(--header-h);
+  min-height: var(--header-h);
+  padding: 0 max(20px, env(safe-area-inset-left)) 0 max(20px, env(safe-area-inset-left));
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel);
+  flex-shrink: 0;
+}
+header h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: 0.12em; color: var(--accent); }
+header .badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.65rem; color: var(--text-dim);
+  border: 1px solid var(--border); padding: 2px 7px; border-radius: 2px;
+}
+
+/* ── Desktop workspace ── */
+.workspace {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Mobile tabs (hidden desktop) */
+.mobile-tabs { display: none; }
+
+/* ── Editor Panel ── */
+.editor-panel {
+  display: flex; flex-direction: column;
+  border-right: 1px solid var(--border);
+  min-height: 0; overflow: hidden;
+}
+
+.toolbar {
+  display: flex; align-items: center; gap: 5px;
+  padding: 8px 12px;
+  background: var(--panel); border-bottom: 1px solid var(--border);
+  flex-wrap: wrap; flex-shrink: 0;
+}
+.toolbar-group {
+  display: flex; gap: 3px; align-items: center;
+  padding-right: 8px; border-right: 1px solid var(--border); margin-right: 2px;
+}
+.toolbar-group:last-child { border-right: none; margin-right: 0; }
+
+.btn {
+  background: var(--card); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 10px; border-radius: var(--r); cursor: pointer;
+  font-size: 0.78rem; font-family: 'Noto Serif TC', serif;
+  transition: background .15s, border-color .15s, color .15s;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.btn:hover  { background: var(--border); border-color: var(--accent); color: var(--accent); }
+.btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+.btn-icon { padding: 6px 9px; font-size: 1rem; }
+
+.font-size-display {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;
+  color: var(--accent); min-width: 28px; text-align: center; user-select: none;
+}
+
+#editor {
+  flex: 1; min-height: 0;
+  background: var(--bg); color: var(--text);
+  border: none; outline: none; resize: none;
+  padding: 20px 24px;
+  font-family: 'Noto Serif TC', serif; font-size: 15px; line-height: 1.85;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* ── Settings Panel ── */
+.settings-panel {
+  display: flex; flex-direction: column;
+  background: var(--panel);
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
+  min-height: 0;
+}
+
+.section { padding: 14px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.section-title {
+  font-size: 0.65rem; letter-spacing: 0.18em; color: var(--text-dim);
+  text-transform: uppercase; margin-bottom: 10px;
+  font-family: 'JetBrains Mono', monospace;
+}
+.setting-row {
+  display: flex; align-items: center;
+  justify-content: space-between; margin-bottom: 9px; gap: 8px;
+}
+.setting-row:last-child { margin-bottom: 0; }
+.setting-label { font-size: 0.8rem; color: var(--text-dim); white-space: nowrap; }
+
+/* Range — cross-browser */
+input[type=range] {
+  -webkit-appearance: none; appearance: none;
+  width: 110px; height: 4px;
+  background: var(--border); border-radius: 2px;
+  outline: none; cursor: pointer; flex-shrink: 0;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--accent); cursor: pointer;
+}
+input[type=range]::-moz-range-thumb {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--accent); border: none; cursor: pointer;
+}
+
+input[type=number], select {
+  background: var(--card); border: 1px solid var(--border); color: var(--text);
+  padding: 5px 8px; border-radius: var(--r);
+  font-size: 0.8rem; font-family: 'Noto Serif TC', serif;
+  outline: none; -webkit-appearance: none; appearance: none;
+}
+input[type=number] { width: 68px; text-align: center; }
+select { width: 126px; }
+
+input[type=color] {
+  -webkit-appearance: none; appearance: none;
+  width: 36px; height: 28px; padding: 1px;
+  border: 1px solid var(--border); border-radius: var(--r);
+  background: none; cursor: pointer;
+}
+input[type=color]::-webkit-color-swatch-wrapper { padding: 0; border-radius: 3px; }
+input[type=color]::-webkit-color-swatch { border: none; border-radius: 3px; }
+
+input[type=text] {
+  background: var(--card); border: 1px solid var(--border); color: var(--text);
+  padding: 5px 8px; border-radius: var(--r);
+  font-size: 0.8rem; font-family: 'Noto Serif TC', serif;
+  outline: none; width: 126px;
+}
+input[type=text]::placeholder { color: var(--text-dim); }
+
+.val-label {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+  color: var(--accent); min-width: 34px; text-align: right;
+}
+
+.style-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.style-option {
+  padding: 7px; border: 1px solid var(--border); border-radius: var(--r);
+  cursor: pointer; text-align: center; font-size: 0.72rem;
+  transition: border-color .15s, background .15s, color .15s;
+  background: var(--card);
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.style-option:hover { border-color: var(--accent); }
+.style-option.active { border-color: var(--accent); background: rgba(212,168,67,.12); color: var(--accent); }
+.style-option .swatch { height: 22px; border-radius: 3px; margin-bottom: 4px; }
+
+.generate-btn {
+  margin: 14px 16px; padding: 13px;
+  background: var(--accent); color: var(--bg);
+  border: none; border-radius: var(--r);
+  font-family: 'Noto Serif TC', serif; font-size: 0.92rem; font-weight: 700;
+  letter-spacing: 0.1em; cursor: pointer;
+  transition: background .2s, transform .1s; flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+}
+.generate-btn:hover  { background: var(--accent2); }
+.generate-btn:active { transform: scale(.98); }
+
+#progress {
+  display: none; margin: 0 16px 12px; padding: 10px;
+  background: var(--card); border: 1px solid var(--border); border-radius: var(--r);
+  font-size: 0.78rem; color: var(--text-dim); text-align: center; flex-shrink: 0;
+}
+
+#output { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.empty-state { padding: 32px 0; text-align: center; color: var(--text-dim); font-size: .82rem; line-height: 2; }
+
+.output-img-wrap {
+  position: relative; border: 1px solid var(--border);
+  border-radius: var(--r); overflow: hidden;
+}
+.output-img-wrap img { display: block; width: 100%; height: auto; }
+.img-label {
+  position: absolute; top: 6px; left: 6px;
+  background: rgba(0,0,0,.6); color: var(--accent);
+  font-family: 'JetBrains Mono', monospace; font-size: .62rem;
+  padding: 2px 6px; border-radius: 2px; pointer-events: none;
+}
+.dl-btn {
+  display: block; text-align: center; padding: 7px;
+  background: var(--card); border: 1px solid var(--border); color: var(--text-dim);
+  font-size: .75rem; cursor: pointer; border-radius: var(--r);
+  text-decoration: none; transition: border-color .15s, color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.dl-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+#dlAllWrap { padding: 0 16px 16px; display: none; }
+.dl-all-btn {
+  display: block; width: 100%; padding: 10px;
+  background: var(--card); border: 1px solid var(--accent); color: var(--accent);
+  font-size: .82rem; cursor: pointer; border-radius: var(--r); text-align: center;
+  transition: background .15s; font-family: 'Noto Serif TC', serif;
+  -webkit-tap-highlight-color: transparent;
+}
+.dl-all-btn:hover { background: rgba(212,168,67,.1); }
+
+/* Dialog */
+.dialog-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 999; backdrop-filter: blur(2px);
+}
+.dialog-box {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 6px; padding: 24px; max-width: 300px; width: 90%; text-align: center;
+}
+.dialog-box p { font-size: .9rem; margin-bottom: 20px; line-height: 1.7; }
+.dialog-actions { display: flex; gap: 10px; justify-content: center; }
+.dialog-actions .btn { padding: 8px 20px; }
+
+/* Toast */
+#toast {
+  position: fixed; bottom: max(24px, env(safe-area-inset-bottom));
+  left: 50%; transform: translateX(-50%);
+  background: var(--accent); color: var(--bg);
+  padding: 8px 20px; border-radius: 4px;
+  font-size: .82rem; font-family: 'Noto Serif TC', serif; font-weight: 700;
+  z-index: 1000; pointer-events: none;
+  opacity: 0; transition: opacity .2s;
+  white-space: nowrap;
+}
+
+/* ── Mobile RWD ── */
+@media (max-width: 767px) {
+  html, body { overflow: hidden; }
+
+  .workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr;
+    overflow: hidden;
+  }
+
+  .mobile-tabs {
+    display: flex; flex-shrink: 0;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    height: var(--tab-h);
+  }
+  .tab-btn {
+    flex: 1; background: none; border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-dim); font-family: 'Noto Serif TC', serif; font-size: .85rem;
+    cursor: pointer; transition: color .15s, border-color .15s;
+    -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+  }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .editor-panel,
+  .settings-panel {
+    display: none !important;
+    flex: 1; min-height: 0; border-right: none;
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
+  .editor-panel.tab-active,
+  .settings-panel.tab-active {
+    display: flex !important;
+    flex-direction: column;
+  }
+
+  #editor { flex: 1; min-height: 200px; }
+
+  input[type=range] { width: 100px; }
+
+  #dlAllWrap { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+}
+
+@media (max-width: 380px) {
+  .btn { padding: 5px 7px; font-size: .72rem; }
+  input[type=range] { width: 82px; }
+  .setting-label { font-size: .75rem; }
+  select, input[type=text] { width: 110px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>文字 → 長圖</h1>
+  <span class="badge">TEXT TO IMAGE</span>
+</header>
+
+<div class="mobile-tabs">
+  <button class="tab-btn active" onclick="switchTab('editor')">✏️ 編輯</button>
+  <button class="tab-btn"        onclick="switchTab('settings')">⚙️ 設定 &amp; 輸出</button>
+</div>
+
+<div class="workspace">
+
+  <div class="editor-panel tab-active" id="editorPanel">
+    <div class="toolbar">
+      <div class="toolbar-group">
+        <button class="btn"      onclick="indentLine()"    title="當前行縮排兩格">⇥ 縮排</button>
+        <button class="btn"      onclick="indentAllLines()" title="全部段落縮排">全縮</button>
+      </div>
+      <div class="toolbar-group">
+        <button class="btn btn-icon active" id="alignLeft"   onclick="setAlign('left')"   title="靠左">☰</button>
+        <button class="btn btn-icon"        id="alignCenter" onclick="setAlign('center')" title="置中">≡</button>
+        <button class="btn btn-icon"        id="alignRight"  onclick="setAlign('right')"  title="靠右">≣</button>
+      </div>
+      <div class="toolbar-group">
+        <button class="btn btn-icon" onclick="changeFontSize(-1)" title="縮小字體">A−</button>
+        <span class="font-size-display" id="fontSizeDisplay">15</span>
+        <button class="btn btn-icon" onclick="changeFontSize(1)"  title="放大字體">A+</button>
+      </div>
+      <div class="toolbar-group">
+        <button class="btn danger" onclick="confirmClear()">清除</button>
+      </div>
+    </div>
+    <textarea id="editor" placeholder="在此貼上或輸入文字…
+
+　　段落開頭的縮排和分行都會被保留。
+　　點「⇥ 縮排」可在當前行開頭加入兩個全形空格。
+　　點「全縮」可讓所有段落縮排。"></textarea>
+  </div>
+
+  <div class="settings-panel" id="settingsPanel">
+
+    <div class="section">
+      <div class="section-title">圖片風格</div>
+      <div class="style-grid">
+        <div class="style-option active" onclick="selectStyle(this,'#fdfaf4','#1a1814')">
+          <div class="swatch" style="background:#fdfaf4;border:1px solid #ccc;"></div>米白典雅
+        </div>
+        <div class="style-option" onclick="selectStyle(this,'#1a1814','#e8dfc8')">
+          <div class="swatch" style="background:#1a1814;"></div>深色復古
+        </div>
+        <div class="style-option" onclick="selectStyle(this,'#ffffff','#111111')">
+          <div class="swatch" style="background:#fff;border:1px solid #ccc;"></div>純白簡約
+        </div>
+        <div class="style-option" onclick="selectStyle(this,'#0f1923','#c9d8e8')">
+          <div class="swatch" style="background:#0f1923;"></div>深海藍調
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">圖片設定</div>
+      <div class="setting-row">
+        <span class="setting-label">圖片寬度</span>
+        <input type="range" min="600" max="1200" step="50" value="800" id="imgWidth"
+               oninput="updateVal('widthVal',this.value,'px')">
+        <span class="val-label" id="widthVal">800px</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">內邊距</span>
+        <input type="range" min="20" max="100" step="5" value="48" id="imgPad"
+               oninput="updateVal('padVal',this.value,'px')">
+        <span class="val-label" id="padVal">48px</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">圖片字級</span>
+        <input type="range" min="14" max="40" step="1" value="22" id="imgFontSize"
+               oninput="updateVal('imgFontVal',this.value,'px')">
+        <span class="val-label" id="imgFontVal">22px</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">行距</span>
+        <input type="range" min="1.4" max="2.8" step="0.1" value="2.0" id="lineHeight"
+               oninput="updateVal('lineHVal',this.value,'')">
+        <span class="val-label" id="lineHVal">2.0</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">段落間距</span>
+        <input type="range" min="0" max="60" step="4" value="20" id="paraGap"
+               oninput="updateVal('paraVal',this.value,'px')">
+        <span class="val-label" id="paraVal">20px</span>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">最多張數</span>
+        <input type="number" id="maxSlices" value="10" min="1" max="20">
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">字型</span>
+        <select id="fontFamily">
+          <option value="'Noto Serif TC', serif">Noto Serif TC</option>
+          <option value="'Noto Sans TC', sans-serif">Noto Sans TC</option>
+          <option value="'SimSun', '宋體', serif">宋體</option>
+          <option value="Georgia, serif">Georgia</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">背景色</span>
+        <input type="color" id="customBg" value="#fdfaf4" oninput="customColorChanged()">
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">文字色</span>
+        <input type="color" id="customFg" value="#1a1814" oninput="customColorChanged()">
+      </div>
+      <div class="setting-row">
+        <span class="setting-label">浮水印</span>
+        <input type="text" id="watermark" placeholder="可留空">
+      </div>
+    </div>
+
+    <button class="generate-btn" onclick="generate()">▶ 產生圖片</button>
+    <div id="progress">處理中…</div>
+    <div id="output"><div class="empty-state">設定完成後<br>點「▶ 產生圖片」</div></div>
+    <div id="dlAllWrap">
+      <button class="dl-all-btn" onclick="downloadAll()">↓ 全部下載（逐張）</button>
+    </div>
+
+  </div>
+</div>
+
+<div class="dialog-overlay" id="dialogOverlay" style="display:none" onclick="closeDialog(false)">
+  <div class="dialog-box" onclick="event.stopPropagation()">
+    <p>確定要清除所有文字嗎？</p>
+    <div class="dialog-actions">
+      <button class="btn"        onclick="closeDialog(false)">取消</button>
+      <button class="btn danger" onclick="closeDialog(true)">清除</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<canvas id="canvas" style="display:none"></canvas>
+
+<script>
+'use strict';
+
+let editorFontSize = 15;
+let textAlign = 'left';
+let generatedImages = [];
+let fontsReady = false;
+
+document.fonts.ready.then(() => { fontsReady = true; });
+
+// ── 禁則字集 ──────────────────────────────────────────────
+const LINE_START_FORBIDDEN = new Set(
+  '。！？；：、，）」』】〕〉》〙〗…‥·・—–～｝'
+  + '.,!?;:)]}\'"\u2019\u201D'
+);
+
+const LINE_END_FORBIDDEN = new Set(
+  '（「『【〔〈《〘〖｛'
+  + '([{\'"\u2018\u201C'
+);
+// ────────────────────────────────────────────────────────
+
+/* Tab switching */
+function switchTab(tab) {
+  const ep = document.getElementById('editorPanel');
+  const sp = document.getElementById('settingsPanel');
+  const tabs = document.querySelectorAll('.tab-btn');
+  if (tab === 'editor') {
+    ep.classList.add('tab-active'); sp.classList.remove('tab-active');
+    tabs[0].classList.add('active'); tabs[1].classList.remove('active');
+  } else {
+    sp.classList.add('tab-active'); ep.classList.remove('tab-active');
+    tabs[1].classList.add('active'); tabs[0].classList.remove('active');
+  }
+}
+
+/* Editor */
+function indentLine() {
+  const ta = document.getElementById('editor');
+  const start = ta.selectionStart;
+  const val = ta.value;
+  const lineStart = val.lastIndexOf('\n', start - 1) + 1;
+  const indent = '\u3000\u3000';
+  ta.value = val.slice(0, lineStart) + indent + val.slice(lineStart);
+  ta.selectionStart = ta.selectionEnd = start + indent.length;
+  ta.focus();
+}
+
+function indentAllLines() {
+  const ta = document.getElementById('editor');
+  const indent = '\u3000\u3000';
+  ta.value = ta.value.split('\n').map(l => l.trim() === '' ? l : indent + l).join('\n');
+}
+
+function setAlign(dir) {
+  textAlign = dir;
+  document.getElementById('editor').style.textAlign = dir;
+  ['alignLeft','alignCenter','alignRight'].forEach(id =>
+    document.getElementById(id).classList.remove('active'));
+  const map = { left:'alignLeft', center:'alignCenter', right:'alignRight' };
+  document.getElementById(map[dir]).classList.add('active');
+}
+
+function changeFontSize(delta) {
+  editorFontSize = Math.max(10, Math.min(32, editorFontSize + delta));
+  document.getElementById('editor').style.fontSize = editorFontSize + 'px';
+  document.getElementById('fontSizeDisplay').textContent = editorFontSize;
+}
+
+/* Custom dialog */
+function confirmClear() {
+  document.getElementById('dialogOverlay').style.display = 'flex';
+}
+function closeDialog(confirmed) {
+  document.getElementById('dialogOverlay').style.display = 'none';
+  if (confirmed) document.getElementById('editor').value = '';
+}
+
+function updateVal(id, val, unit) {
+  document.getElementById(id).textContent = val + unit;
+}
+
+function selectStyle(el, bg, fg) {
+  document.querySelectorAll('.style-option').forEach(e => e.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('customBg').value = bg;
+  document.getElementById('customFg').value = fg;
+}
+function customColorChanged() {
+  document.querySelectorAll('.style-option').forEach(e => e.classList.remove('active'));
+}
+
+/* Generate */
+async function generate() {
+  const text = document.getElementById('editor').value;
+  if (!text.trim()) { showToast('請先輸入文字！'); return; }
+
+  const prog = document.getElementById('progress');
+  prog.style.display = 'block';
+  prog.textContent = '字型載入中…';
+  document.getElementById('output').innerHTML = '';
+  document.getElementById('dlAllWrap').style.display = 'none';
+  generatedImages = [];
+
+  if (!fontsReady) {
+    await Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 3000))]);
+    fontsReady = true;
+  }
+  prog.textContent = '產生中…';
+  await new Promise(r => setTimeout(r, 30));
+
+  try {
+    const params = {
+      text,
+      width:      parseInt(document.getElementById('imgWidth').value),
+      pad:        parseInt(document.getElementById('imgPad').value),
+      fontSize:   parseInt(document.getElementById('imgFontSize').value),
+      lh:         parseFloat(document.getElementById('lineHeight').value),
+      paraGap:    parseInt(document.getElementById('paraGap').value),
+      maxSlices:  parseInt(document.getElementById('maxSlices').value),
+      fontFamily: document.getElementById('fontFamily').value,
+      watermark:  document.getElementById('watermark').value.trim(),
+      bg:         document.getElementById('customBg').value,
+      fg:         document.getElementById('customFg').value,
+      align:      textAlign
+    };
+
+    params.maxSlices = Math.max(1, params.maxSlices || 1);
+
+    const images = renderTextToImages(params);
+    generatedImages = images;
+    const output = document.getElementById('output');
+    output.innerHTML = '';
+
+    images.forEach((dataUrl, i) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'output-img-wrap';
+      const lbl = document.createElement('div');
+      lbl.className = 'img-label';
+      lbl.textContent = `${i+1} / ${images.length}`;
+      const img = document.createElement('img');
+      img.src = dataUrl; img.loading = 'lazy'; img.alt = `第${i+1}張`;
+      wrap.append(lbl, img);
+      output.appendChild(wrap);
+
+      const dl = document.createElement('a');
+      dl.className = 'dl-btn';
+      dl.textContent = `↓ 下載第 ${i+1} 張`;
+      dl.download = `img_${String(i+1).padStart(2,'0')}.png`;
+      dl.href = dataUrl;
+      output.appendChild(dl);
+    });
+
+    if (images.length > 1) document.getElementById('dlAllWrap').style.display = 'block';
+    if (window.innerWidth <= 767) switchTab('settings');
+
+  } catch (err) {
+    document.getElementById('output').innerHTML =
+      `<div class="empty-state" style="color:var(--danger)">產生失敗：${err.message}</div>`;
+  }
+  prog.style.display = 'none';
+}
+
+/* ── Canvas render (改寫為智慧分頁邏輯) ── */
+function renderTextToImages({ text, width, pad, fontSize, lh, paraGap,
+                               maxSlices, fontFamily, watermark, bg, fg, align }) {
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+  const lineH  = fontSize * lh;
+  const innerW = width - pad * 2;
+  const fontStr = `${fontSize}px ${fontFamily}`;
+
+  ctx.font = fontStr;
+
+  const paragraphs = text.split('\n');
+  const allLines = [];
+
+  // 將文字拆分為行，處理換行與禁則
+  paragraphs.forEach((para, pi) => {
+    if (para.trim() === '') {
+      allLines.push({ text: '', isBlank: true });
+      return;
+    }
+    wrapText(ctx, para, innerW).forEach(line =>
+      allLines.push({ text: line, isBlank: false }));
+    if (pi < paragraphs.length - 1 && paraGap > 0)
+      allLines.push({ text: '', isBlank: true, isParaGap: true, gapPx: paraGap });
+  });
+
+  const wmH = watermark ? 32 : 0;
+  const topPad = pad;
+  const botPad = pad + wmH;
+
+  // 1. 先計算所有內容的總高度，以便推算單張圖片的「合理目標高度」
+  let totalContentH = 0;
+  allLines.forEach(l => {
+    totalContentH += l.isParaGap ? l.gapPx : (l.isBlank ? lineH * 0.5 : lineH);
+  });
+  const totalH = totalContentH + topPad + botPad;
+
+  // 2. 核心觀念：設定一個彈性的閾值，而不是硬切
+  // 設定防呆最低高度 (例如 600px)，避免文字極少時被設定的 maxSlices 切成碎片
+  const MIN_PAGE_HEIGHT = 600; 
+  // 計算期望的切割高度（軟限制）
+  const targetPageHeight = Math.max(Math.ceil(totalH / maxSlices), MIN_PAGE_HEIGHT);
+
+  const pages = [];
+  let currentPage = { lines: [], height: topPad };
+
+  // 3. 逐行堆疊，當「預測高度」超過軟限制時，就將當前頁打包，開啟新頁面
+  allLines.forEach(line => {
+    const advance = line.isParaGap ? line.gapPx : (line.isBlank ? lineH * 0.5 : lineH);
+    const predictedHeight = currentPage.height + advance + botPad;
+
+    // 如果這行加進去會超過目標高度，且當前頁面已經有內容，則執行分頁
+    if (predictedHeight > targetPageHeight && currentPage.lines.length > 0) {
+      currentPage.totalHeight = currentPage.height + botPad; // 結算本頁最終高度
+      pages.push(currentPage);
+      currentPage = { lines: [], height: topPad }; // 重置新頁面
+    }
+
+    // 記錄這行字在「當前頁面」的絕對 Y 座標
+    currentPage.lines.push({ ...line, y: currentPage.height });
+    currentPage.height += advance;
+  });
+
+  // 收尾：將最後未滿的頁面推入陣列
+  if (currentPage.lines.length > 0) {
+    currentPage.totalHeight = currentPage.height + botPad;
+    pages.push(currentPage);
+  }
+
+  // 套用使用者的「最多張數」限制（避免極端情況下產生過多圖檔）
+  const finalPages = pages.slice(0, maxSlices);
+  const images = [];
+
+  // 4. 根據分配好的頁面陣列，逐張繪製到 Canvas
+  finalPages.forEach((page, s) => {
+    canvas.width  = width;
+    canvas.height = page.totalHeight;
+
+    // 繪製背景
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, width, page.totalHeight);
+
+    // 設定文字樣式
+    ctx.fillStyle = fg;
+    ctx.font = fontStr; // 每次更改 canvas 尺寸後都必須重新指定 font
+    ctx.textBaseline = 'top';
+
+    // 繪製該頁面包含的所有行
+    page.lines.forEach(line => {
+      if (!line.isBlank && !line.isParaGap) {
+        let x;
+        const tw = ctx.measureText(line.text).width;
+        if      (align === 'center') x = (width - tw) / 2;
+        else if (align === 'right')  x = width - pad - tw;
+        else                          x = pad;
+        
+        ctx.fillText(line.text, x, line.y);
+      }
+    });
+
+    // 繪製浮水印（鎖定在該頁的右下角）
+    if (watermark) {
+      ctx.save();
+      ctx.fillStyle = fg + '55';
+      ctx.font = `13px ${fontFamily}`;
+      ctx.textBaseline = 'bottom';
+      ctx.textAlign = 'right';
+      ctx.fillText(watermark, width - pad, page.totalHeight - 8);
+      ctx.restore();
+    }
+
+    // 繪製切割線提示（最後一張不畫）
+    if (s < finalPages.length - 1) {
+      ctx.fillStyle = fg + '18';
+      ctx.fillRect(pad, page.totalHeight - 1, innerW, 1);
+    }
+
+    images.push(canvas.toDataURL('image/png'));
+  });
+
+  return images;
+}
+
+/* ── 文字折行（含禁則處理）── */
+function wrapText(ctx, text, maxWidth) {
+  if (!text) return [''];
+
+  const lines = [];
+  const chars = [...text];
+  let cur = '';
+
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    const test = cur + ch;
+
+    if (ctx.measureText(test).width > maxWidth && cur.length > 0) {
+      if (LINE_START_FORBIDDEN.has(ch)) {
+        lines.push(cur + ch);
+        cur = '';
+        continue;
+      }
+
+      const curChars = [...cur];
+      const lastCh   = curChars[curChars.length - 1];
+      if (LINE_END_FORBIDDEN.has(lastCh) && curChars.length > 1) {
+        lines.push(curChars.slice(0, -1).join(''));
+        cur = lastCh + ch;
+        continue;
+      }
+
+      lines.push(cur);
+      cur = ch;
+
+    } else {
+      cur = test;
+    }
+  }
+
+  if (cur) lines.push(cur);
+
+  const result = lines.filter(l => l !== '');
+  return result.length > 0 ? result : [''];
+}
+
+/* ── 全部下載 ── */
+async function downloadAll() {
+  if (!generatedImages.length) return;
+  showToast(`開始下載 ${generatedImages.length} 張圖片…`);
+  for (let i = 0; i < generatedImages.length; i++) {
+    const a = document.createElement('a');
+    a.href = generatedImages[i];
+    a.download = `img_${String(i+1).padStart(2,'0')}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    await new Promise(r => setTimeout(r, 350));
+  }
+}
+
+/* ── Toast ── */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => { t.style.opacity = '0'; }, 2400);
+}
+</script>
+</body>
+</html>
